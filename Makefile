@@ -6,11 +6,16 @@ CONFIGURATION	:= Release
 LIBRARY			:= src/LibModbus/LibModbus.csproj
 
 .PHONY: default
-default: package
+default: restore package
 
 .PHONY: restore
 restore:
 	dotnet restore
+
+.PHONY: clean
+clean:
+	rm -rf $(BUILD)
+	rm -rf $(ARTIFACTS)
 
 .PHONY: run-example
 run-example:
