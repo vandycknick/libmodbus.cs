@@ -24,9 +24,7 @@ namespace LibModbus
         private int _transactionId = 0;
         private byte _unitId;
         private bool disposedValue;
-
-        private int _timeout = 500000;
-        // private ushort _refresh = 10;
+        private int _timeout = 500;
 
         private readonly SocketConnection _connection;
         private readonly EndPoint _endpoint;
