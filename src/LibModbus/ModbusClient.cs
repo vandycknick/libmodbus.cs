@@ -1,6 +1,8 @@
+using LibModbus.Protocol;
+using LibModbus.Frame;
+using Pipelines.Sockets.Unofficial;
 using System;
 using System.Buffers;
-using System.Buffers.Binary;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -10,9 +12,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using LibModbus.Protocol;
-using LibModbus.Frame;
-using Pipelines.Sockets.Unofficial;
 
 namespace LibModbus
 {
@@ -21,14 +20,18 @@ namespace LibModbus
     /// </summary>
     public sealed class ModbusClient : IDisposable
     {
+        private const byte UNIT_ID = 0xFE;
+        
         private int _transactionId = 0;
-        private byte _unitId;
-        private bool disposedValue;
+        private bool _isDisposed;
         private int _timeout = 500;
 
         private readonly SocketConnection _connection;
         private readonly EndPoint _endpoint;
         private readonly ModbusFrameWriter _writer;
+        private Task _readingTask;
+
+        private bool _active;
 
         private readonly ConcurrentDictionary<ushort, TaskCompletionSource<ResponseAdu>> _messages = new ConcurrentDictionary<ushort, TaskCompletionSource<ResponseAdu>>();
 
@@ -39,14 +42,11 @@ namespace LibModbus
 
         public ModbusClient(EndPoint endpoint)
         {
-            var options = new PipeOptions();
             var socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-            var random = new Random();
-            _unitId = (byte)random.Next(byte.MinValue + 1, byte.MaxValue);
+            SocketConnection.SetRecommendedClientOptions(socket);
 
             _endpoint = endpoint;
-            _connection = SocketConnection.Create(socket, options);
+            _connection = SocketConnection.Create(socket, PipeOptions.Default);
 
             _writer = new ModbusFrameWriter(_connection.Output);
         }
@@ -64,13 +64,14 @@ namespace LibModbus
             }
         }
 
-        public async ValueTask Connect()
+        public async Task ConnectAsync()
         {
-            if (_connection.Socket.Connected) return;
-
             await _connection.Socket.ConnectAsync(_endpoint).ConfigureAwait(false);
-            Console.WriteLine($"Connection status {_connection.Socket.Connected}");
-            _ = PollMessages();
+
+            if (!_connection.Socket.Connected) throw new SocketException((int)SocketError.NotConnected);
+            _active = true;
+            _readingTask = ReadMessages();
+
         }
 
         private SequencePosition ReadFrame(ReadOnlySequence<byte> buffer)
@@ -79,7 +80,7 @@ namespace LibModbus
             var position = reader.ReadFrame(out var frame);
 
             if (!frame.Equals(ResponseAdu.Empty) &&
-                _messages.TryRemove(frame.Header.TransactionID, out var source) && frame.Header.UnitID == _unitId)
+                _messages.TryRemove(frame.Header.TransactionID, out var source) && frame.Header.UnitID == UNIT_ID)
             {
                 source.SetResult(frame);
             }
@@ -87,40 +88,38 @@ namespace LibModbus
             return position;
         }
 
-        private async Task PollMessages()
+        private async Task ReadMessages()
         {
-            try
+            while (true)
             {
-                while (_connection.Socket.Connected)
+                var result = await _connection.Input.ReadAsync().ConfigureAwait(false);
+
+                if (result.IsCompleted || result.IsCanceled)
                 {
-                    var result = await _connection.Input.ReadAsync().ConfigureAwait(false);
-                    var buffer = result.Buffer;
-                    var position = ReadFrame(buffer);
-
-                    _connection.Input.AdvanceTo(position, buffer.End);
+                    break;
                 }
+
+                var buffer = result.Buffer;
+                var position = ReadFrame(buffer);
+
+                _connection.Input.AdvanceTo(position, buffer.End);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
+
+            _active = false;
         }
 
-        private void ThrowIfNotConnected()
-        {
-            if (!_connection.Socket.Connected)
-            {
-                throw new SocketException((int)SocketError.NotConnected);
-            }
-        }
-
-        private Header CreateHeader() => new Header(NextTransactionID(), _unitId);
+        private Header CreateHeader() => new Header(NextTransactionID(), UNIT_ID);
 
         public async Task<List<bool>> ReadCoils(ushort address, ushort quantity, CancellationToken token = default)
         {
             ThrowIfDisposed();
 
-            ThrowIfNotConnected();
+            ThrowIfNotActive();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
 
             var header = CreateHeader();
             var request = new RequestAdu
@@ -138,7 +137,7 @@ namespace LibModbus
 
             var flushResult = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
 
-            var source = new TaskCompletionSource<ResponseAdu>();
+            var source = new TaskCompletionSource<ResponseAdu>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             if (!_messages.TryAdd(header.TransactionID, source))
             {
@@ -185,7 +184,12 @@ namespace LibModbus
         {
             ThrowIfDisposed();
 
-            ThrowIfNotConnected();
+            ThrowIfNotActive();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
 
             var header = CreateHeader();
             var frame = new RequestAdu
@@ -204,8 +208,7 @@ namespace LibModbus
 
             var flushResult = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
 
-            var source = new TaskCompletionSource<ResponseAdu>();
-
+            var source = new TaskCompletionSource<ResponseAdu>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             if (!_messages.TryAdd(header.TransactionID, source))
             {
@@ -217,7 +220,7 @@ namespace LibModbus
             if (race == source.Task)
             {
                 var responseFrame = await source.Task;
-                
+
                 if (responseFrame.Pdu is ResponseWriteSingleCoil response)
                 {
                     return response.Result;
@@ -242,10 +245,15 @@ namespace LibModbus
 
         private void ThrowIfDisposed()
         {
-            if (disposedValue)
+            if (_isDisposed)
             {
                 ThrowObjectDisposedException();
             }
+        }
+
+        private void ThrowIfNotActive()
+        {
+            if (!_active) throw new SocketException((int) SocketError.NotConnected);
         }
 
         [DoesNotReturn]
@@ -253,7 +261,7 @@ namespace LibModbus
 
         private void Dispose(bool disposing)
         {
-            if (!disposedValue)
+            if (!_isDisposed)
             {
                 if (disposing)
                 {
@@ -262,7 +270,7 @@ namespace LibModbus
                 _connection.Dispose();
                 // TODO: free unmanaged resources (unmanaged objects) and override finalizer
                 // TODO: set large fields to null
-                disposedValue = true;
+                _isDisposed = true;
             }
         }
 
