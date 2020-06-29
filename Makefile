@@ -6,10 +6,10 @@ CONFIGURATION	:= Release
 LIBRARY			:= src/LibModbus/LibModbus.csproj
 
 .PHONY: default
-default: restore package
+default: setup package
 
-.PHONY: restore
-restore:
+.PHONY: setup
+setup:
 	dotnet restore
 
 .PHONY: clean
