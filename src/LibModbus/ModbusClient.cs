@@ -16,12 +16,12 @@ using System.Threading.Tasks;
 namespace LibModbus
 {
     /// <summary>
-    ///     Modbus TCP Client
+    /// Modbus TCP Client
     /// </summary>
     public sealed class ModbusClient : IDisposable
     {
         private const byte UNIT_ID = 0xFE;
-        
+
         private int _transactionId = 0;
         private bool _isDisposed;
         private int _timeout = 500;
@@ -51,6 +51,128 @@ namespace LibModbus
             _writer = new ModbusFrameWriter(_connection.Output);
         }
 
+        public async Task ConnectAsync()
+        {
+            await _connection.Socket.ConnectAsync(_endpoint).ConfigureAwait(false);
+
+            if (!_connection.Socket.Connected) throw new SocketException((int)SocketError.NotConnected);
+
+            _active = true;
+            _readingTask = ReadMessages();
+        }
+
+
+        public async Task<List<bool>> ReadCoils(ushort address, ushort quantity, CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfNotActive();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
+            var header = CreateHeader();
+            var frame = new RequestAdu
+            {
+                Header = header,
+                Pdu = new RequestReadCoils
+                {
+                    Address = address,
+                    Quantity = quantity,
+                }
+            };
+
+            var written = _writer.WriteFrame(frame);
+            _connection.Output.Advance(written);
+
+            var waitForResponse = WaitForResponse<ResponseReadCoils>(frame, token).ConfigureAwait(false);
+            var flushResult = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
+
+            var response = await waitForResponse;
+
+            var bits = new BitArray(response.Coils);
+            var result = new List<bool>();
+
+            for (var i = 0; i < quantity; i++)
+            {
+                result.Add(bits[i]);
+            }
+
+            return result;
+        }
+
+        public async Task<bool> WriteSingleCoil(ushort address, bool state, CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfNotActive();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
+            var header = CreateHeader();
+            var frame = new RequestAdu
+            {
+                Header = header,
+                Pdu = new RequestWriteSingleCoil
+                {
+                    Address = address,
+                    CoilState = state,
+                }
+            };
+
+            var written = _writer.WriteFrame(frame);
+
+            _connection.Output.Advance(written);
+
+            var waitForResponse = WaitForResponse<ResponseWriteSingleCoil>(frame, token).ConfigureAwait(false);
+
+            var result = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
+
+            var response = await waitForResponse;
+
+            return response.Result;
+        }
+
+        public async Task WriteMultipleCoils(ushort address, bool[] states, CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfNotActive();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
+            var header = CreateHeader();
+            var frame = new RequestAdu
+            {
+                Header = header,
+                Pdu = new RequestWriteMultipleCoils
+                {
+                    Address = address,
+                    CoilStates = states
+                }
+            };
+
+            var written = _writer.WriteFrame(frame);
+
+            _connection.Output.Advance(written);
+
+            var waitForResponse = WaitForResponse<ResponseWriteMultipleCoils>(frame, token).ConfigureAwait(false);
+
+            var result = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
+
+            var response = await waitForResponse;
+
+            // TODO: check if quantity and adress are correct?
+        }
+
         private ushort NextTransactionID()
         {
             if (_transactionId == ushort.MaxValue)
@@ -62,16 +184,6 @@ namespace LibModbus
             {
                 return (ushort)Interlocked.Increment(ref _transactionId);
             }
-        }
-
-        public async Task ConnectAsync()
-        {
-            await _connection.Socket.ConnectAsync(_endpoint).ConfigureAwait(false);
-
-            if (!_connection.Socket.Connected) throw new SocketException((int)SocketError.NotConnected);
-            _active = true;
-            _readingTask = ReadMessages();
-
         }
 
         private SequencePosition ReadFrame(ReadOnlySequence<byte> buffer)
@@ -110,104 +222,9 @@ namespace LibModbus
 
         private Header CreateHeader() => new Header(NextTransactionID(), UNIT_ID);
 
-        public async Task<List<bool>> ReadCoils(ushort address, ushort quantity, CancellationToken token = default)
+        private async Task<T> WaitForResponse<T>(RequestAdu request, CancellationToken token = default) where T : IResponsePdu
         {
-            ThrowIfDisposed();
-
-            ThrowIfNotActive();
-
-            if (token == null)
-            {
-                throw new ArgumentNullException(nameof(token));
-            }
-
-            var header = CreateHeader();
-            var request = new RequestAdu
-            {
-                Header = header,
-                Pdu = new RequestReadCoils
-                {
-                    Address = address,
-                    Quantity = quantity,
-                }
-            };
-
-            var written = _writer.WriteFrame(request);
-            _connection.Output.Advance(written);
-
-            var flushResult = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
-
-            var source = new TaskCompletionSource<ResponseAdu>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_messages.TryAdd(header.TransactionID, source))
-            {
-                // TODO: improve this
-                throw new Exception("Can't start transaction");
-            }
-
-            var race = await Task.WhenAny(source.Task, Task.Delay(_timeout, token)).ConfigureAwait(false);
-
-            if (race == source.Task)
-            {
-                var frame = await source.Task;
-
-                if (frame.Pdu is ResponseReadCoils response)
-                {
-                    var bits = new BitArray(response.Coils);
-                    var result = new List<bool>();
-
-                    for (var i = 0; i < quantity; i++)
-                    {
-                        result.Add(bits[i]);
-                    }
-
-                    return result;
-                }
-                else if (frame.Pdu is ResponseError error)
-                {
-                    throw new ModbusRequestException(error.ErrorCode);
-                }
-                else
-                {
-                    throw new ModbusRequestException("Unknown response");
-                }
-            }
-            else
-            {
-                source.SetCanceled();
-                _messages.Remove(header.TransactionID, out var _);
-                throw new TimeoutException();
-            }
-        }
-
-        public async Task<bool> WriteSingleCoil(ushort address, bool state, CancellationToken token = default)
-        {
-            ThrowIfDisposed();
-
-            ThrowIfNotActive();
-
-            if (token == null)
-            {
-                throw new ArgumentNullException(nameof(token));
-            }
-
-            var header = CreateHeader();
-            var frame = new RequestAdu
-            {
-                Header = header,
-                Pdu = new RequestWriteSingleCoil
-                {
-                    Address = address,
-                    CoilState = state,
-                }
-            };
-
-            var written = _writer.WriteFrame(frame);
-
-            _connection.Output.Advance(written);
-
-            var flushResult = await _connection.Output.FlushAsync(token).ConfigureAwait(false);
-
+            var header = request.Header;
             var source = new TaskCompletionSource<ResponseAdu>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             if (!_messages.TryAdd(header.TransactionID, source))
@@ -221,9 +238,9 @@ namespace LibModbus
             {
                 var responseFrame = await source.Task;
 
-                if (responseFrame.Pdu is ResponseWriteSingleCoil response)
+                if (responseFrame.Pdu is T response)
                 {
-                    return response.Result;
+                    return response;
 
                 }
                 else if (responseFrame.Pdu is ResponseError error)
@@ -253,7 +270,7 @@ namespace LibModbus
 
         private void ThrowIfNotActive()
         {
-            if (!_active) throw new SocketException((int) SocketError.NotConnected);
+            if (!_active) throw new SocketException((int)SocketError.NotConnected);
         }
 
         [DoesNotReturn]
@@ -265,18 +282,15 @@ namespace LibModbus
             {
                 if (disposing)
                 {
-                    // TODO: dispose managed state (managed objects)
                 }
+
                 _connection.Dispose();
-                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
-                // TODO: set large fields to null
                 _isDisposed = true;
             }
         }
 
         ~ModbusClient()
         {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
             Dispose(disposing: false);
         }
 

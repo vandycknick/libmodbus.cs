@@ -11,7 +11,7 @@ namespace LibModbus.ConsoleApp
             var address = Environment.GetEnvironmentVariable("WORKER_ADDRESS");
             using var client = new ModbusClient(address);
 
-            await client.Connect();
+            await client.ConnectAsync();
 
             Console.WriteLine();
             Console.WriteLine("Starting read");

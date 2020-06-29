@@ -22,4 +22,10 @@ namespace LibModbus.Frame
         public ushort Address { get; set; }
         public bool CoilState { get; set; }
     }
+
+    internal struct RequestWriteMultipleCoils : IRequestPdu
+    {
+        public ushort Address { get; set; }
+        public bool[] CoilStates { get; set; }
+    }
 }

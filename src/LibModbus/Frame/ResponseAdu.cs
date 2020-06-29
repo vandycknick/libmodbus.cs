@@ -4,25 +4,32 @@ namespace LibModbus.Frame
     {
         public static ResponseAdu Empty = new ResponseAdu { Header = Header.Empty, Pdu = null };
         public Header Header { get; set; }
-        public IResponse Pdu { get; set; }
+        public IResponsePdu Pdu { get; set; }
     }
 
-    internal interface IResponse
+    internal interface IResponsePdu
     {
 
     }
 
-    internal struct ResponseReadCoils : IResponse
+    internal struct ResponseReadCoils : IResponsePdu
     {
         public byte[] Coils { get; set; }
     }
 
-    internal struct ResponseWriteSingleCoil : IResponse
+    internal struct ResponseWriteSingleCoil : IResponsePdu
     {
+        public ushort Address { get; set; }
         public bool Result { get; set; }
     }
 
-    internal struct ResponseError : IResponse
+    internal struct ResponseWriteMultipleCoils : IResponsePdu
+    {
+        public ushort Address { get; set; }
+        public ushort Quantity { get; set; }
+    }
+
+    internal struct ResponseError : IResponsePdu
     {
         public ModbusErrorCode ErrorCode { get; set; }
     }

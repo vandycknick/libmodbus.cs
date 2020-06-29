@@ -36,7 +36,7 @@ namespace LibModbus.Test.Protocol
         [Fact]
         public void ModbusFrameReader_ReadFrame_ParsesAWriteSingleCoilResponseTurnedOn()
         {
-            //Given
+            // Given
             var header = new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x09, };
             var data = new byte[] { 0x05, 0x00, 0x04, 0xFF, 0x00 };
 
@@ -44,11 +44,11 @@ namespace LibModbus.Test.Protocol
             var last = first.Append(data);
             var sequence = new ReadOnlySequence<byte>(first, 0, last, 5);
 
-            //When
+            // When
             var reader = new ModbusFrameReader(sequence);
             var position = reader.ReadFrame(out var frame);
 
-            //Then
+            // Then
             Assert.Equal(1, frame.Header.TransactionID);
             Assert.Equal(9, frame.Header.UnitID);
 
@@ -61,20 +61,19 @@ namespace LibModbus.Test.Protocol
         [Fact]
         public void ModbusFrameReader_ReadFrame_ParsesAWriteSingleCoilResponseTurnedOff()
         {
-            //Given
+            // Given
             var header = new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x09, };
             var data = new byte[] { 0x05, 0x00, 0x04, 0x00, 0x00 };
-
 
             var first = new MemorySegment<byte>(header);
             var last = first.Append(data);
             var sequence = new ReadOnlySequence<byte>(first, 0, last, 5);
 
-            //When
+            // When
             var reader = new ModbusFrameReader(sequence);
             var position = reader.ReadFrame(out var frame);
 
-            //Then
+            // Then
             Assert.Equal(1, frame.Header.TransactionID);
             Assert.Equal(9, frame.Header.UnitID);
 
@@ -82,6 +81,31 @@ namespace LibModbus.Test.Protocol
             Assert.False(response.Result);
 
             Assert.Equal(sequence.End, position);
+        }
+
+        [Fact]
+        public void ModbusFrameReader_ReadFrame_ParsesAWriteMultipleCoilsResponse()
+        {
+            // Given
+            var header = new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x20, };
+            var data = new byte[] { 0x0F, 0x00, 0x12, 0x00, 0x04, };
+
+            var first = new MemorySegment<byte>(header);
+            var last = first.Append(data);
+            var sequence = new ReadOnlySequence<byte>(first, 0, last, 5);
+
+
+            // When
+            var reader = new ModbusFrameReader(sequence);
+            var position = reader.ReadFrame(out var frame);
+
+            // Then
+            Assert.Equal(1, frame.Header.TransactionID);
+            Assert.Equal(32, frame.Header.UnitID);
+
+            var response = Assert.IsType<ResponseWriteMultipleCoils>(frame.Pdu);
+            Assert.Equal(18, response.Address);
+            Assert.Equal(4, response.Quantity);
         }
 
         [Fact]

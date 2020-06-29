@@ -21,6 +21,10 @@ clean:
 run-example:
 	dotnet run --project src/LibModbus.ConsoleApp
 
+.PHONY: test
+test: 
+	dotnet test
+
 .PHONY: package
 package:
 	dotnet build $(LIBRARY) -c $(CONFIGURATION)

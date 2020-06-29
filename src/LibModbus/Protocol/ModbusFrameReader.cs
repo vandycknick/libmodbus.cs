@@ -94,7 +94,7 @@ namespace LibModbus.Protocol
             return false;
         }
 
-        private static bool TryReadResponse(ref ReadOnlySequence<byte> buffer, ushort length, out IResponse response)
+        private static bool TryReadResponse(ref ReadOnlySequence<byte> buffer, ushort length, out IResponsePdu response)
         {
             response = null;
 
@@ -130,7 +130,7 @@ namespace LibModbus.Protocol
             return result;
         }
 
-        private static bool TryReadResponse(ReadOnlySpan<byte> data, out IResponse response)
+        private static bool TryReadResponse(ReadOnlySpan<byte> data, out IResponsePdu response)
         {
             var code = data[0];
 
@@ -149,15 +149,29 @@ namespace LibModbus.Protocol
 
                 case (byte)ModbusFunction.WriteSingleCoil:
                     {
-                        var bytes = data.Slice(3, 2);
-                        var result = BinaryPrimitives.ReadUInt16BigEndian(bytes);
+                        var address = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(1, 2));
+                        var coil = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(3, 2));
 
                         response = new ResponseWriteSingleCoil
                         {
-                            Result = result == 0xFF00 ? true : false,
+                            Address = address,
+                            Result = ModbusFrameUtils.CoilToBool(coil),
                         };
                         return true;
                     }
+
+                case (byte)ModbusFunction.WriteMultipleCoils:
+                {
+                    var address = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(1, 2));
+                    var quantity = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(3, 2));
+
+                    response = new ResponseWriteMultipleCoils
+                    {
+                        Address = address,
+                        Quantity = quantity,
+                    };
+                    return true;
+                }
 
                 case (byte)ModbusFunction.ReadCoilStatus | ERROR_BIT:
                 case (byte)ModbusFunction.WriteSingleCoil | ERROR_BIT:
