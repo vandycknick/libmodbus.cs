@@ -5,11 +5,17 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [v0.3.0]
-### Fix
-- Race condition where a request is parsed before a TaksCompletion is registered leading into a TimeoutException.
+### Fixed
+- Race condition were a request is parsed before a TaksCompletion is registered leading into a TimeoutException.
 
 ### Added
 - Write multiple coils
+- Added custom socket impl. that provides a wrapper around pipelines and is build more extensible.
+- Client builder api
+
+### Removed
+- Client can only be instantiated via builder api
+- Socket unofficial dependency
 
 ## [v0.2.0] - 2020-06-20
 ### Updated
