@@ -1,6 +1,7 @@
 using LibModbus.Frame;
 using LibModbus.Protocol;
 using System.Buffers;
+using System.Collections.Generic;
 using Xunit;
 
 namespace LibModbus.Test.Protocol
@@ -63,32 +64,67 @@ namespace LibModbus.Test.Protocol
             );
         }
 
-        [Fact]
-        public void ModbusFrameWriter_WriteFrame_CorrectlyWritesAWriteMultipleCoilsRequest()
+        [Theory]
+        [MemberData(nameof(GetWriteMultipleCoilsRequestTestData))]
+        public void ModbusFrameWriter_WriteFrame_CorrectlyWritesAWriteMultipleCoilsRequest(object request, byte[] expected)
         {
             // Given
-            var request = new RequestAdu
-            {
-                Header = new Header(transactionID: 1, unitID: 4),
-                Pdu = new RequestWriteMultipleCoils
-                {
-                    Address = 0x42,
-                    CoilStates = new bool[] { true, false, true, true , false, true, false, false }
-                },
-            };
             var arraybuffer = new ArrayBufferWriter<byte>();
 
             // When
             var writer = new ModbusFrameWriter(arraybuffer);
-            var position = writer.WriteFrame(request);
+            var position = writer.WriteFrame((RequestAdu)request);
             arraybuffer.Advance(position);
 
             // Then
             var data = arraybuffer.WrittenSpan.ToArray();
-            Assert.Equal(
-                new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x08, 0x04, 0x0F, 0x00, 0x42, 0x00, 0x08, 0x01, 0x2D },
-                data
-            );
+            Assert.Equal(expected, data);
+        }
+
+        public static IEnumerable<object[]> GetWriteMultipleCoilsRequestTestData()
+        {
+
+            yield return new object[]
+            {
+                new RequestAdu
+                {
+                    Header = new Header(transactionID: 1, unitID: 4),
+                    Pdu = new RequestWriteMultipleCoils
+                    {
+                        Address = 0x42,
+                        CoilStates = new bool[] { true, false, true, true , false, true, false, false }
+                    },
+                }, // Request
+                new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x08, 0x04, 0x0F, 0x00, 0x42, 0x00, 0x08, 0x01, 0x2D, }, // Result
+            };
+
+            yield return new object[]
+            {
+                new RequestAdu
+                {
+                    Header = new Header(transactionID: 2, unitID: 4),
+                    Pdu = new RequestWriteMultipleCoils
+                    {
+                        Address = 0x42,
+                        CoilStates = new bool[] { true, false, true, }
+                    },
+                }, // Request
+                new byte[] { 0x00, 0x02, 0x00, 0x00, 0x00, 0x08, 0x04, 0x0F, 0x00, 0x42, 0x00, 0x03, 0x01, 0x05, }, // Result
+            };
+
+            yield return new object[]
+            {
+                new RequestAdu
+                {
+                    Header = new Header(transactionID: 3, unitID: 4),
+                    Pdu = new RequestWriteMultipleCoils
+                    {
+                        Address = 0x42,
+                        CoilStates = new bool[] { true, false, true, true, true, false, false, true, true, false, true }
+                    },
+                }, // Request
+                new byte[] { 0x00, 0x03, 0x00, 0x00, 0x00, 0x09, 0x04, 0x0F, 0x00, 0x42, 0x00, 0x0B, 0x02,0x9D, 0x05, }, // Result
+            };
         }
     }
 }

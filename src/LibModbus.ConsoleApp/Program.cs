@@ -9,12 +9,27 @@ namespace LibModbus.ConsoleApp
         static async Task Main(string[] args)
         {
             var address = Environment.GetEnvironmentVariable("WORKER_ADDRESS");
-            using var client = new ModbusClient(address);
+
+            await using var client = new ModbusClientBuilder()
+                                    .UseSocket(address, 5020)
+                                    .Build();
 
             await client.ConnectAsync();
 
+            await client.WriteSingleCoil(8, true);
+
             Console.WriteLine();
-            Console.WriteLine("Starting read");
+
+            await ReadCoilsAndLog(client, 0, 10);
+
+            var states = new bool[20];
+
+            states[2] = true;
+            states[3] = true;
+
+            await client.WriteMultipleCoils(0, states);
+
+            Console.WriteLine();
             await ReadCoilsAndLog(client, 0, 10);
 
             await Task.Delay(1000);

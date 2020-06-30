@@ -10,12 +10,10 @@ namespace LibModbus.Protocol
         private const byte HEADER_LENGTH = 7;
         private const byte ERROR_BIT = 0x80;
         private ReadOnlySequence<byte> _sequence;
-        private SequenceReader<byte> _reader;
 
         public ModbusFrameReader(ReadOnlySequence<byte> sequence)
         {
             _sequence = sequence;
-            _reader = new SequenceReader<byte>(sequence);
         }
 
         public SequencePosition ReadFrame(out ResponseAdu frame)

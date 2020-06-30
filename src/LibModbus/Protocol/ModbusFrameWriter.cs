@@ -27,20 +27,16 @@ namespace LibModbus.Protocol
         private int WriteHeader(Memory<byte> memory, ushort transactionID, byte unitID, ushort length)
         {
             var written = 0;
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), transactionID);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), transactionID);
 
             // Write Protocol ID
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), PROTOCOL_ID);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), PROTOCOL_ID);
 
             // Write length
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), length);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), length);
 
             // Write Unit ID
-            memory.Span[written] = unitID;
-            written += sizeof(byte);
+            written += WriteByte(memory.Span.Slice(written, 1), unitID);
 
             return written;
         }
@@ -52,16 +48,13 @@ namespace LibModbus.Protocol
             var written = WriteHeader(memory, header.TransactionID, header.UnitID, 6);
 
             // Write Function Code
-            memory.Span[written] = (byte)ModbusFunction.ReadCoilStatus;
-            written += sizeof(byte);
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.ReadCoilStatus);
 
             // Write Address Data
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
 
             // Write Quantity Data
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Quantity);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Quantity);
 
             return written;
         }
@@ -73,60 +66,53 @@ namespace LibModbus.Protocol
             var written = WriteHeader(memory, header.TransactionID, header.UnitID, 6);
 
             // Write Function Code
-            memory.Span[written] = (byte)ModbusFunction.WriteSingleCoil;
-            written += sizeof(byte);
-
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.WriteSingleCoil);
             // Write Address Data
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
 
             // Write State
             var data = ModbusFrameUtils.BoolToCoil(request.CoilState);
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), data);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), data);
 
             return written;
         }
 
         private int WriteRequestWriteMultipleCoils(Header header, RequestWriteMultipleCoils request)
         {
-            var memory = _writer.GetMemory(HEADER_LEN + sizeof(ushort) * 2 + sizeof(byte));
-            var byteCount = (byte)((request.CoilStates.Length % 8 != 0 ? request.CoilStates.Length / 8 + 1 : (request.CoilStates.Length / 8)));
+            var memory = _writer.GetMemory(256);
+            var byteCount = ModbusFrameUtils.GetByteCount(request.CoilStates);
             var length = (ushort)(HEADER_LEN + byteCount);
 
             var written = WriteHeader(memory, header.TransactionID, header.UnitID, length);
 
             // Write Function Code
-            memory.Span[written] = (byte)ModbusFunction.WriteMultipleCoils;
-            written += sizeof(byte);
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.WriteMultipleCoils);
 
             // Write Address Data
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);;
 
             // Write Number of registers
-            BinaryPrimitives.WriteUInt16BigEndian(memory.Span.Slice(written, 2), (ushort)request.CoilStates.Length);
-            written += sizeof(ushort);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), (ushort)request.CoilStates.Length);
 
             // Write byte count
-            memory.Span[written] = byteCount;
-            written += sizeof(byte);
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)byteCount);
 
-            // Write bytes
-            byte singleCoilValue = 0;
-            for (int i = 0; i < request.CoilStates.Length; i++)
-            {
-                if ((i % 8) == 0) singleCoilValue = 0;
-
-                var coilValue = request.CoilStates[i] == true ? (byte)1 : (byte)0;
-
-                singleCoilValue = (byte)(coilValue << (i % 8) | singleCoilValue);
-
-                memory.Span[written + (i / 8)] = singleCoilValue;
-            }
-            written = written + byteCount;
+            // Write packed coil values
+            written += ModbusFrameUtils.PackCoils(memory.Span.Slice(written), request.CoilStates);
 
             return written;
+        }
+
+        private static int WriteByte(Span<byte> buffer, byte value)
+        {
+            buffer[0] = value;
+            return sizeof(byte);
+        }
+
+        private static int WriteUInt16BigEndian(Span<byte> buffer, ushort value)
+        {
+            BinaryPrimitives.WriteUInt16BigEndian(buffer, value);
+            return sizeof(ushort);
         }
     }
 }
