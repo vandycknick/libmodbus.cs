@@ -31,3 +31,8 @@ jobs:
 
     - name: Test
       run: make test
+
+    - name: Push packages
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      run: |
+        dotnet nuget push artifacts/**/*.nupkg --api-key ${{ secrets.FEEDZ_IO_TOKEN }} --source https://f.feedz.io/nvd/libmodbus/nuget/index.json --skip-duplicate
