@@ -30,12 +30,12 @@ namespace LibModbus
         private Task _readingTask;
         private IConnectionFactory _factory;
 
-        private readonly ConcurrentDictionary<ushort, TaskCompletionSource<ResponseAdu>> _messages = new ConcurrentDictionary<ushort, TaskCompletionSource<ResponseAdu>>();
+        private readonly ConcurrentDictionary<ushort, TaskCompletionSource<ResponseAdu>> _transactions = new ConcurrentDictionary<ushort, TaskCompletionSource<ResponseAdu>>();
 
         internal ModbusClient(IConnectionFactory factory)
         {
             _factory = factory;
-        }   
+        }
 
         public async Task ConnectAsync(CancellationToken token = default)
         {
@@ -176,7 +176,7 @@ namespace LibModbus
             var position = reader.ReadFrame(out var frame);
 
             if (!frame.Equals(ResponseAdu.Empty) &&
-                _messages.TryRemove(frame.Header.TransactionID, out var source) && frame.Header.UnitID == UNIT_ID)
+                _transactions.TryRemove(frame.Header.TransactionID, out var source) && frame.Header.UnitID == UNIT_ID)
             {
                 source.SetResult(frame);
             }
@@ -186,19 +186,45 @@ namespace LibModbus
 
         private async Task ReadMessages()
         {
-            while (true)
+            try
             {
-                var result = await _connection.Transport.Input.ReadAsync().ConfigureAwait(false);
-
-                if (result.IsCompleted || result.IsCanceled)
+                while (true)
                 {
-                    break;
+                    var result = await _connection.Transport.Input.ReadAsync().ConfigureAwait(false);
+
+                    if (result.IsCompleted || result.IsCanceled)
+                    {
+                        break;
+                    }
+
+                    var buffer = result.Buffer;
+                    var position = ReadFrame(buffer);
+
+                    _connection.Transport.Input.AdvanceTo(position, buffer.End);
                 }
+            }
+            catch (ConnectionAbortedException ex)
+            {
+                RejectAllPendingTransactions(ex);
+            }
+            catch (ConnectionResetException ex)
+            {
+                RejectAllPendingTransactions(ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ReadMessages Exception: {ex}");
+            }
+        }
 
-                var buffer = result.Buffer;
-                var position = ReadFrame(buffer);
+        private void RejectAllPendingTransactions(Exception ex)
+        {
+            foreach (var transaction in _transactions)
+            {
+                _transactions.TryRemove(transaction.Key, out _);
 
-                _connection.Transport.Input.AdvanceTo(position, buffer.End);
+                // Cancel all pending operations
+                transaction.Value.TrySetException(ex);
             }
         }
 
@@ -209,7 +235,7 @@ namespace LibModbus
             var header = request.Header;
             var source = new TaskCompletionSource<ResponseAdu>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            if (!_messages.TryAdd(header.TransactionID, source))
+            if (!_transactions.TryAdd(header.TransactionID, source))
             {
                 throw new InvalidOperationException("Can't start transaction.");
             }
@@ -237,7 +263,7 @@ namespace LibModbus
             else
             {
                 source.SetCanceled();
-                _messages.Remove(header.TransactionID, out var _);
+                _transactions.Remove(header.TransactionID, out var _);
                 throw new TimeoutException();
             }
         }
@@ -262,20 +288,21 @@ namespace LibModbus
         {
             _isDisposed = true;
 
-            if (_connection != null)
+            if (_connection == null)
             {
-                await _connection.DisposeAsync();
+                return;
             }
 
-            if (_readingTask != null)
+            await _connection.DisposeAsync().ConfigureAwait(false);
+
+            await _readingTask.ConfigureAwait(false);
+
+            foreach (var transaction in _transactions)
             {
-                try
-                {
-                    await _readingTask;
-                    _readingTask.Dispose();
-                }
-                catch 
-                {}
+                _transactions.TryRemove(transaction.Key, out _);
+
+                // Cancel all pending operations
+                transaction.Value.TrySetCanceled();
             }
         }
     }
