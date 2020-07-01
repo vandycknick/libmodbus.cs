@@ -6,6 +6,54 @@
 
 Library to send/receive data with a device which respects the Modbus protocol for dotnet. Written with performance in mind.
 
+## Install
+
+Install the [NuGet package][nuget-package-url] into your project.
+
+```
+PM> Install-Package LibModbus
+```
+
+```
+$ dotnet add package LibModbus
+```
+
+## Usage
+
+### Client Builder
+
+```csharp
+var address = "127.0.0.1";
+await using var client = new ModbusClientBuilder()
+                        .UseSocket(address)
+                        .Build();
+```
+
+### Connect And Read Coils
+```csharp
+await client.ConnectAsync();
+
+var coils = await client.ReadCoils(2, 10);
+
+var index = 2;
+foreach (var coil in coils)
+{
+    var onOrOff = coil ? "on" : "off";
+    Console.WriteLine($"Coil {index++} is {onOrOff}");
+}
+```
+
+## Protocol-Specification
+
+- [MODBUS Application Protocol Specification v1.1b3 (PDF)](http://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf)
+- [MODBUS over serial line specification and implementation guide v1.02 (PDF)](http://modbus.org/docs/Modbus_over_serial_line_V1_02.pdf)
+- [MODBUS Messaging on TCP/IP Implementation Guide v1.0b (PDF)](http://modbus.org/docs/Modbus_Messaging_Implementation_Guide_V1_0b.pdf)
+
+## License
+
+Copyright 2020 [Nick Van Dyck](https://nvd.codes)
+
+MIT
 
 [ci-url]: https://github.com/nickvdyck/libmodbus.cs
 [ci-badge]: https://github.com/nickvdyck/libmodbus.cs/workflows/Main/badge.svg
