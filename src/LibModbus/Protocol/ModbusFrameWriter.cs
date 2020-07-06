@@ -19,6 +19,7 @@ namespace LibModbus.Protocol
         public int WriteFrame(RequestAdu frame) => frame.Pdu switch
         {
             RequestReadCoils request => WriteRequestReadCoils(frame.Header, request),
+            RequestReadDiscreteInputs request => WriteRequestReadDiscreteInputs(frame.Header, request),
             RequestWriteSingleCoil request => WriteRequestWriteSingleCoil(frame.Header, request),
             RequestWriteMultipleCoils request => WriteRequestWriteMultipleCoils(frame.Header, request),
             _ => 0,
@@ -44,11 +45,27 @@ namespace LibModbus.Protocol
         private int WriteRequestReadCoils(Header header, RequestReadCoils request)
         {
             var memory = _writer.GetMemory(HEADER_LEN + sizeof(ushort) * 2 + sizeof(byte));
-
             var written = WriteHeader(memory, header.TransactionID, header.UnitID, 6);
 
             // Write Function Code
-            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.ReadCoilStatus);
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.ReadCoils);
+
+            // Write Address Data
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
+
+            // Write Quantity Data
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Quantity);
+
+            return written;
+        }
+
+        private int WriteRequestReadDiscreteInputs(Header header, RequestReadDiscreteInputs request)
+        {
+            var memory = _writer.GetMemory(HEADER_LEN + sizeof(ushort) * 2 + sizeof(byte));
+            var written = WriteHeader(memory, header.TransactionID, header.UnitID, 6);
+
+            // Write Function Code
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.ReadDiscreteInputs);
 
             // Write Address Data
             written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
@@ -67,6 +84,7 @@ namespace LibModbus.Protocol
 
             // Write Function Code
             written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.WriteSingleCoil);
+            
             // Write Address Data
             written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
 

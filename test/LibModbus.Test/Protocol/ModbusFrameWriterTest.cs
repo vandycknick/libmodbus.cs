@@ -37,6 +37,34 @@ namespace LibModbus.Test.Protocol
         }
 
         [Fact]
+        public void ModbusFrameWriter_WriteFrame_CorrectlyWritesAReadDiscreteInputsRequet()
+        {
+            // Given
+            var request = new RequestAdu
+            {
+                Header = new Header(transactionID: 1, unitID: 4),
+                Pdu = new RequestReadDiscreteInputs
+                {
+                    Address = 0x0040,
+                    Quantity = 0x000A,
+                },
+            };
+            var arraybuffer = new ArrayBufferWriter<byte>();
+
+            // When
+            var writer = new ModbusFrameWriter(arraybuffer);
+            var position = writer.WriteFrame(request);
+            arraybuffer.Advance(position);
+
+            // Then
+            var data = arraybuffer.WrittenSpan.ToArray();
+            Assert.Equal(
+                new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x04, 0x02, 0x00, 0x40, 0x00, 0x0A },
+                data
+            );
+        }
+
+        [Fact]
         public void ModbusFrameWriter_WriteFrame_CorrectlyWritesAWriteSingleCoilRequest()
         {
             // Given

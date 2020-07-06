@@ -86,6 +86,47 @@ namespace LibModbus
             return result;
         }
 
+        public async Task<List<bool>> ReadDiscreteInputs(ushort address, ushort quantity, CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfNotConnected();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
+            var header = CreateHeader();
+            var frame = new RequestAdu
+            {
+                Header = header,
+                Pdu = new RequestReadDiscreteInputs
+                {
+                    Address = address,
+                    Quantity = quantity,
+                }
+            };
+
+            var written = _writer.WriteFrame(frame);
+            _connection.Transport.Output.Advance(written);
+
+            var waitForResponse = WaitForResponse<ResponseReadDiscreteInputs>(frame, token).ConfigureAwait(false);
+            var flushResult = await _connection.Transport.Output.FlushAsync(token).ConfigureAwait(false);
+
+            var response = await waitForResponse;
+
+            var bits = new BitArray(response.Inputs);
+            var result = new List<bool>();
+
+            for (var i = 0; i < quantity; i++)
+            {
+                result.Add(bits[i]);
+            }
+
+            return result;
+        }
+
         public async Task<bool> WriteSingleCoil(ushort address, bool state, CancellationToken token = default)
         {
             ThrowIfDisposed();

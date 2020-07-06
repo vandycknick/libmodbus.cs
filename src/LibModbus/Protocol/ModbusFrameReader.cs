@@ -25,7 +25,7 @@ namespace LibModbus.Protocol
             {
                 // Decrease length by one because unitID is part of the lenght but already parsed in the header
                 var dataLen = length - 1;
-                if (TryReadResponse(ref _sequence, (ushort) dataLen, out var response))
+                if (TryReadResponse(ref _sequence, (ushort)dataLen, out var response))
                 {
                     frame = new ResponseAdu
                     {
@@ -134,13 +134,24 @@ namespace LibModbus.Protocol
 
             switch (code)
             {
-                case (byte)ModbusFunction.ReadCoilStatus:
+                case (byte)ModbusFunction.ReadCoils:
                     {
                         var extra = data[1];
                         var bytes = data.Slice(2, extra).ToArray();
                         response = new ResponseReadCoils
                         {
                             Coils = bytes,
+                        };
+                        return true;
+                    }
+
+                case (byte)ModbusFunction.ReadDiscreteInputs:
+                    {
+                        var extra = data[1];
+                        var bytes = data.Slice(2, extra).ToArray();
+                        response = new ResponseReadDiscreteInputs
+                        {
+                            Inputs = bytes,
                         };
                         return true;
                     }
@@ -159,19 +170,19 @@ namespace LibModbus.Protocol
                     }
 
                 case (byte)ModbusFunction.WriteMultipleCoils:
-                {
-                    var address = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(1, 2));
-                    var quantity = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(3, 2));
-
-                    response = new ResponseWriteMultipleCoils
                     {
-                        Address = address,
-                        Quantity = quantity,
-                    };
-                    return true;
-                }
+                        var address = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(1, 2));
+                        var quantity = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(3, 2));
 
-                case (byte)ModbusFunction.ReadCoilStatus | ERROR_BIT:
+                        response = new ResponseWriteMultipleCoils
+                        {
+                            Address = address,
+                            Quantity = quantity,
+                        };
+                        return true;
+                    }
+
+                case (byte)ModbusFunction.ReadCoils | ERROR_BIT:
                 case (byte)ModbusFunction.WriteSingleCoil | ERROR_BIT:
                 case (byte)ModbusFunction.WriteMultipleCoils | ERROR_BIT:
                     {

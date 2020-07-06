@@ -34,6 +34,31 @@ namespace LibModbus.Test.Protocol
         }
 
         [Fact]
+        public void ModbusFrameReader_ReadFrame_ParsesAReadDiscreteInputsResponse()
+        {
+            // Given
+            var header = new byte[] { 0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x09, };
+            var data = new byte[] { 0x02, 0x01, 0x01, };
+
+            var first = new MemorySegment<byte>(header);
+            var last = first.Append(data);
+            var sequence = new ReadOnlySequence<byte>(first, 0, last, 3);
+
+            // When
+            var reader = new ModbusFrameReader(sequence);
+            var position = reader.ReadFrame(out var frame);
+
+            // Then
+            Assert.Equal(1, frame.Header.TransactionID);
+            Assert.Equal(9, frame.Header.UnitID);
+
+            var read = Assert.IsType<ResponseReadDiscreteInputs>(frame.Pdu);
+            Assert.Equal(new byte[] { 1 }, read.Inputs);
+
+            Assert.Equal(sequence.End, position);
+        }
+
+        [Fact]
         public void ModbusFrameReader_ReadFrame_ParsesAWriteSingleCoilResponseTurnedOn()
         {
             // Given
