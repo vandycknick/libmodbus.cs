@@ -4,7 +4,7 @@
 [![NuGet][nuget-package-badge]][nuget-package-url]
 [![feedz.io][feedz-package-badge]][feedz-package-url]
 
-Library to send/receive data with a device which respects the Modbus protocol for dotnet. Written with performance in mind.
+Library to send/receive data with a device which respects the Modbus protocol for dotnet.
 
 ## Install
 
@@ -17,6 +17,17 @@ PM> Install-Package LibModbus
 ```
 $ dotnet add package LibModbus
 ```
+
+## Supported Functions
+
+- [X] Read Coils (FC1)
+- [ ] Read Discrete Inputs (FC2)
+- [ ] Read Holding Registers (FC3)
+- [ ] Read Input Registers (FC4)
+- [X] Write Single Coil (FC5)
+- [ ] Write Single Register (FC6)
+- [X] Write Multiple Coils (FC15)
+- [ ] Write Multiple Registers (FC16)
 
 ## Usage
 
