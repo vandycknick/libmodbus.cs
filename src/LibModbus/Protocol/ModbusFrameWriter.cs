@@ -18,8 +18,8 @@ namespace LibModbus.Protocol
 
         public int WriteFrame(RequestAdu frame) => frame.Pdu switch
         {
-            RequestReadCoils request => WriteRequestReadCoils(frame.Header, request),
-            RequestReadDiscreteInputs request => WriteRequestReadDiscreteInputs(frame.Header, request),
+            RequestReadCoils request => WriteRequestReadCommand(frame.Header, ModbusFunction.ReadCoils, request.Address, request.Quantity),
+            RequestReadDiscreteInputs request => WriteRequestReadCommand(frame.Header, ModbusFunction.ReadDiscreteInputs, request.Address, request.Quantity),
             RequestWriteSingleCoil request => WriteRequestWriteSingleCoil(frame.Header, request),
             RequestWriteMultipleCoils request => WriteRequestWriteMultipleCoils(frame.Header, request),
             _ => 0,
@@ -42,36 +42,21 @@ namespace LibModbus.Protocol
             return written;
         }
 
-        private int WriteRequestReadCoils(Header header, RequestReadCoils request)
+        // RequestReadCoils
+        // RequestReadDiscreteInputs
+        private int WriteRequestReadCommand(Header header, ModbusFunction function, ushort address, ushort quantity)
         {
             var memory = _writer.GetMemory(HEADER_LEN + sizeof(ushort) * 2 + sizeof(byte));
             var written = WriteHeader(memory, header.TransactionID, header.UnitID, 6);
 
             // Write Function Code
-            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.ReadCoils);
+            written += WriteByte(memory.Span.Slice(written, 1), (byte)function);
 
             // Write Address Data
-            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), address);
 
             // Write Quantity Data
-            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Quantity);
-
-            return written;
-        }
-
-        private int WriteRequestReadDiscreteInputs(Header header, RequestReadDiscreteInputs request)
-        {
-            var memory = _writer.GetMemory(HEADER_LEN + sizeof(ushort) * 2 + sizeof(byte));
-            var written = WriteHeader(memory, header.TransactionID, header.UnitID, 6);
-
-            // Write Function Code
-            written += WriteByte(memory.Span.Slice(written, 1), (byte)ModbusFunction.ReadDiscreteInputs);
-
-            // Write Address Data
-            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Address);
-
-            // Write Quantity Data
-            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), request.Quantity);
+            written += WriteUInt16BigEndian(memory.Span.Slice(written, 2), quantity);
 
             return written;
         }
