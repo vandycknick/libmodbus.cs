@@ -15,7 +15,10 @@
             "cwd": "${workspaceFolder}/src/LibModbus.ConsoleApp",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            "env": {
+                "WORKER_ADDRESS": "127.0.0.1"
+            }
         },
         {
             "name": ".NET Core Attach",

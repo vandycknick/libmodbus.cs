@@ -23,6 +23,18 @@ namespace LibModbus.Frame
         public ushort Quantity { get; set; }
     }
 
+    internal struct RequestReadInputRegisters : IRequestPdu
+    {
+        public ushort Address { get; set; }
+        public ushort Quantity { get; set; }
+    }
+
+    internal struct RequestReadHoldingRegisters : IRequestPdu
+    {
+        public ushort Address { get; set; }
+        public ushort Quantity { get; set; }
+    }
+
     internal struct RequestWriteSingleCoil : IRequestPdu
     {
         public ushort Address { get; set; }

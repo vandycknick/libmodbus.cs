@@ -19,7 +19,17 @@ namespace LibModbus.Frame
 
     internal struct ResponseReadDiscreteInputs : IResponsePdu
     {
-        public byte[] Inputs { get; set; }
+        public byte[] Coils { get; set; }
+    }
+
+    internal struct ResponseReadInputRegisters : IResponsePdu
+    {
+        public ushort[] Results { get; set; }
+    }
+
+    internal struct ResponseReadHoldingRegisters : IResponsePdu
+    {
+        public ushort[] Results { get; set; }
     }
 
     internal struct ResponseWriteSingleCoil : IResponsePdu

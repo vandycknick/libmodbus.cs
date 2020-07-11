@@ -128,6 +128,23 @@ namespace LibModbus.Protocol
             return result;
         }
 
+        private static byte[] ReadCoilData(ReadOnlySpan<byte> data) => data.Slice(1, data[0]).ToArray();
+
+        private static ushort[] ReadWordData(ReadOnlySpan<byte> data)
+        {
+            var length = data[0];
+            var registers = length / 2;
+            var words = new ushort[registers];
+            var registerSlice = data.Slice(1);
+
+            for (var i = 0; i < registers; i++)
+            {
+                words[i] = BinaryPrimitives.ReadUInt16BigEndian(registerSlice.Slice(i  * 2, 2));
+            }
+
+            return words;
+        }
+
         private static bool TryReadResponse(ReadOnlySpan<byte> data, out IResponsePdu response)
         {
             var code = data[0];
@@ -136,23 +153,38 @@ namespace LibModbus.Protocol
             {
                 case (byte)ModbusFunction.ReadCoils:
                     {
-                        var extra = data[1];
-                        var bytes = data.Slice(2, extra).ToArray();
                         response = new ResponseReadCoils
                         {
-                            Coils = bytes,
+                            Coils = ReadCoilData(data.Slice(1)),
                         };
                         return true;
                     }
 
                 case (byte)ModbusFunction.ReadDiscreteInputs:
                     {
-                        var extra = data[1];
-                        var bytes = data.Slice(2, extra).ToArray();
                         response = new ResponseReadDiscreteInputs
                         {
-                            Inputs = bytes,
+                            Coils = ReadCoilData(data.Slice(1)),
                         };
+                        return true;
+                    }
+
+                case (byte)ModbusFunction.ReadInputRegisters:
+                    {
+                        response = new ResponseReadInputRegisters
+                        {
+                            Results = ReadWordData(data.Slice(1)),
+                        };
+                        return true;
+                    }
+
+                case (byte)ModbusFunction.ReadHoldingRegisters:
+                    {
+                        response = new ResponseReadHoldingRegisters
+                        {
+                            Results = ReadWordData(data.Slice(1)),
+                        };
+
                         return true;
                     }
 
@@ -183,6 +215,9 @@ namespace LibModbus.Protocol
                     }
 
                 case (byte)ModbusFunction.ReadCoils | ERROR_BIT:
+                case (byte)ModbusFunction.ReadDiscreteInputs | ERROR_BIT:
+                case (byte)ModbusFunction.ReadInputRegisters | ERROR_BIT:
+                case (byte)ModbusFunction.ReadHoldingRegisters | ERROR_BIT:
                 case (byte)ModbusFunction.WriteSingleCoil | ERROR_BIT:
                 case (byte)ModbusFunction.WriteMultipleCoils | ERROR_BIT:
                     {

@@ -22,8 +22,8 @@ $ dotnet add package LibModbus
 
 - [X] Read Coils (FC1)
 - [X] Read Discrete Inputs (FC2)
-- [ ] Read Holding Registers (FC3)
-- [ ] Read Input Registers (FC4)
+- [X] Read Holding Registers (FC3)
+- [X] Read Input Registers (FC4)
 - [X] Write Single Coil (FC5)
 - [ ] Write Single Register (FC6)
 - [X] Write Multiple Coils (FC15)

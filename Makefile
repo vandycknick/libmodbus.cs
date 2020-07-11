@@ -25,6 +25,11 @@ run-example:
 test: 
 	dotnet test
 
+.PHONY: test-server
+test-server:
+	cd test/ModbusTestServer && \
+		pipenv run python main.py
+
 .PHONY: package
 package:
 	dotnet build $(LIBRARY) -c $(CONFIGURATION)

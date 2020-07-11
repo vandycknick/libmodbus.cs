@@ -116,7 +116,7 @@ namespace LibModbus
 
             var response = await waitForResponse;
 
-            var bits = new BitArray(response.Inputs);
+            var bits = new BitArray(response.Coils);
             var result = new List<bool>();
 
             for (var i = 0; i < quantity; i++)
@@ -125,6 +125,72 @@ namespace LibModbus
             }
 
             return result;
+        }
+
+        public async Task<ushort[]> ReadHoldingRegisters(ushort address, ushort quantity, CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfNotConnected();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
+            var header = CreateHeader();
+            var frame = new RequestAdu
+            {
+                Header = header,
+                Pdu = new RequestReadHoldingRegisters
+                {
+                    Address = address,
+                    Quantity = quantity,
+                }
+            };
+
+            var written = _writer.WriteFrame(frame);
+            _connection.Transport.Output.Advance(written);
+
+            var waitForResponse = WaitForResponse<ResponseReadHoldingRegisters>(frame, token).ConfigureAwait(false);
+            var flushResult = await _connection.Transport.Output.FlushAsync(token).ConfigureAwait(false);
+
+            var response = await waitForResponse;
+
+            return response.Results;
+        }
+
+        public async Task<ushort[]> ReadInputRegisters(ushort address, ushort quantity, CancellationToken token = default)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfNotConnected();
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
+            var header = CreateHeader();
+            var frame = new RequestAdu
+            {
+                Header = header,
+                Pdu = new RequestReadInputRegisters
+                {
+                    Address = address,
+                    Quantity = quantity,
+                }
+            };
+
+            var written = _writer.WriteFrame(frame);
+            _connection.Transport.Output.Advance(written);
+
+            var waitForResponse = WaitForResponse<ResponseReadInputRegisters>(frame, token).ConfigureAwait(false);
+            var flushResult = await _connection.Transport.Output.FlushAsync(token).ConfigureAwait(false);
+
+            var response = await waitForResponse;
+
+            return response.Results;
         }
 
         public async Task<bool> WriteSingleCoil(ushort address, bool state, CancellationToken token = default)

@@ -20,6 +20,8 @@ namespace LibModbus.Protocol
         {
             RequestReadCoils request => WriteRequestReadCommand(frame.Header, ModbusFunction.ReadCoils, request.Address, request.Quantity),
             RequestReadDiscreteInputs request => WriteRequestReadCommand(frame.Header, ModbusFunction.ReadDiscreteInputs, request.Address, request.Quantity),
+            RequestReadInputRegisters request => WriteRequestReadCommand(frame.Header, ModbusFunction.ReadInputRegisters, request.Address, request.Quantity),
+            RequestReadHoldingRegisters request => WriteRequestReadCommand(frame.Header, ModbusFunction.ReadHoldingRegisters, request.Address, request.Quantity),
             RequestWriteSingleCoil request => WriteRequestWriteSingleCoil(frame.Header, request),
             RequestWriteMultipleCoils request => WriteRequestWriteMultipleCoils(frame.Header, request),
             _ => 0,
@@ -44,6 +46,7 @@ namespace LibModbus.Protocol
 
         // RequestReadCoils
         // RequestReadDiscreteInputs
+        // RequestReadInputRegisters
         private int WriteRequestReadCommand(Header header, ModbusFunction function, ushort address, ushort quantity)
         {
             var memory = _writer.GetMemory(HEADER_LEN + sizeof(ushort) * 2 + sizeof(byte));
